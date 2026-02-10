@@ -4,15 +4,23 @@ const listDiv = document.getElementById('list');
 const searchBar = document.getElementById('searchBar');
 const ficCount = document.getElementById('ficCount');
 const clearAllBtn = document.getElementById('clearAll');
+const markAllBtn = document.getElementById('markAllRead');
+const refreshBtn = document.getElementById('refreshBtn');
 const tabUpdates = document.getElementById('tabUpdates');
 const tabAll = document.getElementById('tabAll');
+const lastSyncText = document.getElementById('lastSync');
 
 let allFics = [];
 let currentView = 'updates';
 
 function loadData() {
-  chrome.storage.local.get({fics: []}, (data) => {
+  chrome.storage.local.get({fics: [], lastSyncTime: 0}, (data) => {
     allFics = data.fics;
+    if (data.lastSyncTime > 0) {
+      lastSyncText.innerText = "Last checked: " + new Date(data.lastSyncTime).toLocaleTimeString();
+    } else {
+      lastSyncText.innerText = "No sync yet";
+    }
     renderList(allFics);
   });
 }
@@ -33,22 +41,26 @@ function renderList(ficsToRender) {
   listDiv.innerHTML = displayList.map((f) => {
     const isSeries = f.url.includes('/series/');
     const prefix = isSeries ? 'w' : 'c'; 
-    const statusText = f.hasNewUpdate ? 'Fanfic Update' : 'Tracking';
+    const statusText = isSeries ? 'Series Update' : 'Work Update';
     const timeText = f.hasNewUpdate ? getTimeAgo(f.lastChecked) : 'Active';
 
+    const actionButton = currentView === 'updates' 
+      ? `<button class="action-btn mark-read-btn" data-url="${f.url}" title="Dismiss Update">✕</button>`
+      : `<button class="action-btn remove-btn" data-url="${f.url}" title="Remove from Tracker">🗑️</button>`;
+
     return `
-      <div class="update-item" data-url="${f.latestUrl || f.url}">
+      <div class="update-item" data-url="${f.latestUrl || f.url}" data-clean-url="${f.url}">
         <div class="item-info">
           <div class="item-title">${f.title || 'Scanning...'} ${prefix}${f.lastChapter || '?'}</div>
           <div class="item-meta">
-            <span class="icon-square">F</span>
+            <span class="icon-square">${isSeries ? 'S' : 'F'}</span>
             <span>${statusText}</span>
             <span>• ${timeText}</span>
           </div>
         </div>
         <div style="display:flex; align-items:center;">
           ${f.hasNewUpdate ? '<div class="status-dot">●</div>' : ''}
-          <button class="remove-btn" data-remove="${f.url}">×</button>
+          ${actionButton}
         </div>
       </div>
     `;
@@ -60,19 +72,54 @@ function renderList(ficsToRender) {
 function attachEventListeners() {
   document.querySelectorAll('.update-item').forEach(item => {
     item.addEventListener('click', (e) => {
-      if (!e.target.classList.contains('remove-btn')) {
+      if (!e.target.closest('.action-btn')) {
+        const cleanUrl = item.dataset.cleanUrl;
+        markAsRead(cleanUrl); 
         window.open(item.dataset.url, '_blank');
       }
+    });
+  });
+
+  document.querySelectorAll('.mark-read-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      markAsRead(btn.dataset.url);
     });
   });
 
   document.querySelectorAll('.remove-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      removeFic(btn.dataset.remove);
+      removeFic(btn.dataset.url);
     });
   });
 }
+
+function markAsRead(url) {
+  chrome.storage.local.get({fics: []}, (data) => {
+    const fics = data.fics.map(f => {
+      if (f.url === url) f.hasNewUpdate = false;
+      return f;
+    });
+    chrome.storage.local.set({fics}, loadData);
+  });
+}
+
+markAllBtn.addEventListener('click', () => {
+  chrome.storage.local.get({fics: []}, (data) => {
+    const fics = data.fics.map(f => {
+      f.hasNewUpdate = false;
+      return f;
+    });
+    chrome.storage.local.set({fics}, loadData);
+  });
+});
+
+refreshBtn.addEventListener('click', () => {
+    lastSyncText.innerText = "Syncing...";
+    chrome.runtime.sendMessage({type: 'CHECK_NOW'});
+    setTimeout(loadData, 2000); // Wait for fetch to complete
+});
 
 addBtn.addEventListener('click', () => {
   const rawText = ficUrls.value.trim();
@@ -90,7 +137,7 @@ addBtn.addEventListener('click', () => {
     chrome.storage.local.set({fics}, () => {
       ficUrls.value = '';
       chrome.runtime.sendMessage({type: 'CHECK_NOW'});
-      setTimeout(loadData, 1000);
+      setTimeout(loadData, 1500);
     });
   });
 });
@@ -110,7 +157,7 @@ tabAll.addEventListener('click', () => {
 });
 
 clearAllBtn.addEventListener('click', () => {
-  if (confirm("Clear all tracked fics?")) {
+  if (confirm("Delete ALL tracked fics permanently?")) {
     chrome.storage.local.set({fics: []}, () => loadData());
   }
 });
