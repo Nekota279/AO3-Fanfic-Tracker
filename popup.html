@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      --bg-dark: #121212; --header-bg: #1e1e1e; --item-hover: #2a2a2a;
+      --text-main: #e0e0e0; --text-dim: #9aa0a6; --accent-purple: #9d4edd; --ao3-red: #990000;
+    }
+    body { width: 350px; margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg-dark); color: var(--text-main); overflow-x: hidden; }
+    .header { background: var(--header-bg); padding: 12px 15px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #333; }
+    .header-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    #clearAll { cursor:pointer; font-size: 11px; color: var(--ao3-red); font-weight: bold; }
+    
+    .tabs { display: flex; background: var(--header-bg); border-bottom: 1px solid #333; }
+    .tab { flex: 1; text-align: center; padding: 10px; font-size: 11px; cursor: pointer; color: var(--text-dim); transition: 0.2s; }
+    .tab.active { color: white; border-bottom: 2px solid var(--ao3-red); }
+
+    .search-container { padding: 8px 12px; background: var(--header-bg); }
+    #searchBar { width: 100%; background: #2d2d2d; border: none; border-radius: 4px; padding: 6px 10px; color: white; font-size: 13px; box-sizing: border-box; }
+    
+    .input-box { padding: 10px 15px; border-bottom: 1px solid #222; }
+    textarea { width: 100%; height: 45px; background: #1e1e1e; border: 1px solid #333; color: white; border-radius: 4px; padding: 5px; resize: none; font-size: 12px; box-sizing: border-box; }
+    #addBtn { width: 100%; margin-top: 8px; padding: 8px; background: var(--ao3-red); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    
+    .update-list { max-height: 350px; overflow-y: auto; }
+    .update-item { padding: 12px 15px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; cursor: pointer; }
+    .update-item:hover { background: var(--item-hover); }
+    .item-info { flex-grow: 1; max-width: 80%; }
+    .item-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item-meta { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+    .status-dot { color: var(--accent-purple); font-size: 16px; margin-left: 10px; }
+    .remove-btn { background: transparent; border: none; color: var(--text-dim); font-size: 18px; cursor: pointer; display: none; }
+    .update-item:hover .remove-btn { display: block; }
+    .icon-square { background: #444; color: white; border-radius: 3px; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; }
+    
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: #333; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-title"><span>←</span> AO3 Updates</div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <span id="clearAll">Clear All</span>
+      <span id="ficCount" style="font-size: 12px; color: var(--text-dim);">0</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div id="tabUpdates" class="tab active">New Updates</div>
+    <div id="tabAll" class="tab">All Tracked</div>
+  </div>
+
+  <div class="search-container"><input type="text" id="searchBar" placeholder="Search..."></div>
+
+  <div class="input-box">
+    <textarea id="ficUrls" placeholder="Paste AO3 links here..."></textarea>
+    <button id="addBtn">Add to Tracker</button>
+  </div>
+
+  <div id="list" class="update-list"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
