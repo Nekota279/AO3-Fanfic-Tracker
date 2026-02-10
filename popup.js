@@ -30,22 +30,29 @@ function renderList(ficsToRender) {
     return;
   }
 
-  listDiv.innerHTML = displayList.map((f) => `
-    <div class="update-item" data-url="${f.latestUrl || f.url}">
-      <div class="item-info">
-        <div class="item-title">${f.title || 'Scanning...'} c${f.lastChapter || '?'}</div>
-        <div class="item-meta">
-          <span class="icon-square">F</span>
-          <span>Fanfic Update</span>
-          <span>• ${f.hasNewUpdate ? getTimeAgo(f.lastChecked) : 'Tracking'}</span>
+  listDiv.innerHTML = displayList.map((f) => {
+    const isSeries = f.url.includes('/series/');
+    const prefix = isSeries ? 'w' : 'c'; 
+    const statusText = f.hasNewUpdate ? 'Fanfic Update' : 'Tracking';
+    const timeText = f.hasNewUpdate ? getTimeAgo(f.lastChecked) : 'Active';
+
+    return `
+      <div class="update-item" data-url="${f.latestUrl || f.url}">
+        <div class="item-info">
+          <div class="item-title">${f.title || 'Scanning...'} ${prefix}${f.lastChapter || '?'}</div>
+          <div class="item-meta">
+            <span class="icon-square">F</span>
+            <span>${statusText}</span>
+            <span>• ${timeText}</span>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center;">
+          ${f.hasNewUpdate ? '<div class="status-dot">●</div>' : ''}
+          <button class="remove-btn" data-remove="${f.url}">×</button>
         </div>
       </div>
-      <div style="display:flex; align-items:center;">
-        ${f.hasNewUpdate ? '<div class="status-dot">●</div>' : ''}
-        <button class="remove-btn" data-remove="${f.url}">×</button>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   attachEventListeners();
 }
@@ -69,7 +76,7 @@ function attachEventListeners() {
 
 addBtn.addEventListener('click', () => {
   const rawText = ficUrls.value.trim();
-  const urlRegex = /archiveofourown\.org\/works\/\d+/g;
+  const urlRegex = /archiveofourown\.org\/(works|series)\/\d+/g;
   const foundUrls = rawText.match(urlRegex) || [];
 
   chrome.storage.local.get({fics: []}, (data) => {
