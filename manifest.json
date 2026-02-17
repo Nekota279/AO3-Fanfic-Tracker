@@ -1,5 +1,5 @@
 {
-  "manifest_version": 4,
+  "manifest_version": 3,
   "name": "AO3 Fanfic Tracker",
   "version": "1.7",
   "description": "Track updates for AO3 works and series with direct chapter links.",
