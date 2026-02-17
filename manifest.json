@@ -1,7 +1,7 @@
 {
-  "manifest_version": 3,
+  "manifest_version": 4,
   "name": "AO3 Fanfic Tracker",
-  "version": "1.6",
+  "version": "1.7",
   "description": "Track updates for AO3 works and series with direct chapter links.",
   "permissions": ["storage", "notifications", "alarms"],
   "host_permissions": ["https://archiveofourown.org/*"],

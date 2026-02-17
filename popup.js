@@ -13,9 +13,17 @@ const lastSyncText = document.getElementById('lastSync');
 let allFics = [];
 let currentView = 'updates';
 
+function updateBadge(fics) {
+  const count = fics.filter(f => f.hasNewUpdate).length;
+  const countText = count > 0 ? count.toString() : "";
+  chrome.action.setBadgeText({ text: countText });
+  chrome.action.setBadgeBackgroundColor({ color: "#990000" });
+}
+
 function loadData() {
   chrome.storage.local.get({fics: [], lastSyncTime: 0}, (data) => {
     allFics = data.fics;
+    updateBadge(allFics);
     if (data.lastSyncTime > 0) {
       lastSyncText.innerText = "Last checked: " + new Date(data.lastSyncTime).toLocaleTimeString();
     } else {
@@ -118,7 +126,7 @@ markAllBtn.addEventListener('click', () => {
 refreshBtn.addEventListener('click', () => {
     lastSyncText.innerText = "Syncing...";
     chrome.runtime.sendMessage({type: 'CHECK_NOW'});
-    setTimeout(loadData, 2000); // Wait for fetch to complete
+    setTimeout(loadData, 3000); 
 });
 
 addBtn.addEventListener('click', () => {
@@ -137,7 +145,7 @@ addBtn.addEventListener('click', () => {
     chrome.storage.local.set({fics}, () => {
       ficUrls.value = '';
       chrome.runtime.sendMessage({type: 'CHECK_NOW'});
-      setTimeout(loadData, 1500);
+      setTimeout(loadData, 2000);
     });
   });
 });
