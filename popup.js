@@ -125,8 +125,15 @@ markAllBtn.addEventListener('click', () => {
 
 refreshBtn.addEventListener('click', () => {
     lastSyncText.innerText = "Syncing...";
-    chrome.runtime.sendMessage({type: 'CHECK_NOW'});
-    setTimeout(loadData, 3000); 
+    refreshBtn.style.pointerEvents = "none";
+    refreshBtn.style.opacity = "0.5";
+
+    chrome.runtime.sendMessage({type: 'CHECK_NOW'}, (response) => {
+        // This callback triggers only when background script says it is done
+        refreshBtn.style.pointerEvents = "auto";
+        refreshBtn.style.opacity = "1";
+        loadData();
+    });
 });
 
 addBtn.addEventListener('click', () => {
@@ -144,8 +151,8 @@ addBtn.addEventListener('click', () => {
     });
     chrome.storage.local.set({fics}, () => {
       ficUrls.value = '';
-      chrome.runtime.sendMessage({type: 'CHECK_NOW'});
-      setTimeout(loadData, 2000);
+      lastSyncText.innerText = "Scanning new additions...";
+      chrome.runtime.sendMessage({type: 'CHECK_NOW'}, () => loadData());
     });
   });
 });
@@ -166,7 +173,10 @@ tabAll.addEventListener('click', () => {
 
 clearAllBtn.addEventListener('click', () => {
   if (confirm("Delete ALL tracked fics permanently?")) {
-    chrome.storage.local.set({fics: []}, () => loadData());
+    chrome.storage.local.set({fics: []}, () => {
+        updateBadge([]);
+        loadData();
+    });
   }
 });
 
