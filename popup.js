@@ -52,6 +52,14 @@ function renderList(ficsToRender) {
     const statusText = isSeries ? 'Series Update' : 'Work Update';
     const timeText = f.hasNewUpdate ? getTimeAgo(f.lastChecked) : 'Active';
 
+    // Format the chapter display to show where the user left off vs the new chapters
+    let chapterDisplayHtml = "";
+    if (f.hasNewUpdate && f.readChapter && f.latestChapter > f.readChapter) {
+        chapterDisplayHtml = `<span class="chapter-range">${prefix}${f.readChapter} ➔ ${prefix}${f.latestChapter}</span>`;
+    } else {
+        chapterDisplayHtml = `<span class="chapter-single">${prefix}${f.latestChapter || f.lastChapter || '?'}</span>`;
+    }
+
     const actionButton = currentView === 'updates' 
       ? `<button class="action-btn mark-read-btn" data-url="${f.url}" title="Dismiss Update">✕</button>`
       : `<button class="action-btn remove-btn" data-url="${f.url}" title="Remove from Tracker">🗑️</button>`;
@@ -59,7 +67,7 @@ function renderList(ficsToRender) {
     return `
       <div class="update-item" data-url="${f.latestUrl || f.url}" data-clean-url="${f.url}">
         <div class="item-info">
-          <div class="item-title">${f.title || 'Scanning...'} ${prefix}${f.lastChapter || '?'}</div>
+          <div class="item-title">${f.title || 'Scanning...'} ${chapterDisplayHtml}</div>
           <div class="item-meta">
             <span class="icon-square">${isSeries ? 'S' : 'F'}</span>
             <span>${statusText}</span>
@@ -83,7 +91,8 @@ function attachEventListeners() {
       if (!e.target.closest('.action-btn')) {
         const cleanUrl = item.dataset.cleanUrl;
         markAsRead(cleanUrl); 
-        window.open(item.dataset.url, '_blank');
+        // Using Chrome tabs API instead of window window.open
+        chrome.tabs.create({ url: item.dataset.url });
       }
     });
   });
@@ -106,7 +115,11 @@ function attachEventListeners() {
 function markAsRead(url) {
   chrome.storage.local.get({fics: []}, (data) => {
     const fics = data.fics.map(f => {
-      if (f.url === url) f.hasNewUpdate = false;
+      if (f.url === url) {
+          f.hasNewUpdate = false;
+          // Sync the user's read position up to the latest available chapter
+          f.readChapter = f.latestChapter || f.lastChapter; 
+      }
       return f;
     });
     chrome.storage.local.set({fics}, loadData);
@@ -117,6 +130,7 @@ markAllBtn.addEventListener('click', () => {
   chrome.storage.local.get({fics: []}, (data) => {
     const fics = data.fics.map(f => {
       f.hasNewUpdate = false;
+      f.readChapter = f.latestChapter || f.lastChapter;
       return f;
     });
     chrome.storage.local.set({fics}, loadData);
@@ -128,8 +142,7 @@ refreshBtn.addEventListener('click', () => {
     refreshBtn.style.pointerEvents = "none";
     refreshBtn.style.opacity = "0.5";
 
-    chrome.runtime.sendMessage({type: 'CHECK_NOW'}, (response) => {
-        // This callback triggers only when background script says it is done
+    chrome.runtime.sendMessage({type: 'CHECK_NOW'}, () => {
         refreshBtn.style.pointerEvents = "auto";
         refreshBtn.style.opacity = "1";
         loadData();
@@ -144,14 +157,21 @@ addBtn.addEventListener('click', () => {
   chrome.storage.local.get({fics: []}, (data) => {
     let fics = data.fics;
     foundUrls.forEach(url => {
-      const cleanUrl = 'https://' + url.split('?')[0].replace(/\/$/, "");
+      const cleanUrl = 'https://' + url.split('?').replace(/\/$/, "");
       if (!fics.find(f => f.url === cleanUrl)) {
-        fics.push({ url: cleanUrl, lastChapter: 0, title: '', baselineSet: false, hasNewUpdate: false });
+        fics.push({ 
+            url: cleanUrl, 
+            readChapter: 0, 
+            latestChapter: 0, 
+            title: '', 
+            baselineSet: false, 
+            hasNewUpdate: false 
+        });
       }
     });
     chrome.storage.local.set({fics}, () => {
       ficUrls.value = '';
-      lastSyncText.innerText = "Scanning new additions...";
+      lastSyncText.innerText = "Scanning additions...";
       chrome.runtime.sendMessage({type: 'CHECK_NOW'}, () => loadData());
     });
   });
@@ -174,7 +194,7 @@ tabAll.addEventListener('click', () => {
 clearAllBtn.addEventListener('click', () => {
   if (confirm("Delete ALL tracked fics permanently?")) {
     chrome.storage.local.set({fics: []}, () => {
-        updateBadge([]);
+        chrome.action.setBadgeText({text: ""});
         loadData();
     });
   }

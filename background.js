@@ -1,10 +1,17 @@
-chrome.alarms.create('checkUpdates', { periodInMinutes: 30 });
-chrome.alarms.onAlarm.addListener(() => checkFics());
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.alarms.create('checkUpdates', { periodInMinutes: 30 });
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'checkUpdates') {
+    checkFics();
+  }
+});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'CHECK_NOW') {
     checkFics().then(() => sendResponse({status: 'done'}));
-    return true; // Keep the message channel open for the async response
+    return true; 
   }
 });
 
@@ -21,7 +28,13 @@ async function checkFics() {
 
   for (let fic of updatedFics) {
     try {
-      await new Promise(r => setTimeout(r, 700));
+      // Data Migration check: If the old 'lastChapter' exists but the new variables don't, port them over.
+      if (fic.readChapter === undefined) {
+          fic.readChapter = fic.lastChapter || 0;
+          fic.latestChapter = fic.lastChapter || 0;
+      }
+
+      await new Promise(r => setTimeout(r, 800));
 
       const response = await fetch(fic.url);
       if (!response.ok) continue;
@@ -29,13 +42,12 @@ async function checkFics() {
       const text = await response.text();
       const isSeries = fic.url.includes('/series/');
 
-      // Title extraction
       let titleMatch = text.match(/<h2 class="title heading">([\s\S]*?)<\/h2>/);
       if (isSeries && !titleMatch) {
           titleMatch = text.match(/<h2 class="heading">([\s\S]*?)<\/h2>/);
       }
       if (titleMatch) {
-          fic.title = titleMatch[1].replace(/<[^>]*>?/gm, '').trim();
+          fic.title = titleMatch.replace(/<[^>]*>?/gm, '').trim();
       }
 
       let currentCount = 0;
@@ -43,34 +55,35 @@ async function checkFics() {
 
       if (isSeries) {
         const seriesMatch = text.match(/<dt>Works:<\/dt>\s*<dd>(\d+)<\/dd>/);
-        currentCount = seriesMatch ? parseInt(seriesMatch[1]) : 0;
+        currentCount = seriesMatch ? parseInt(seriesMatch) : 0;
         
         const allWorkLinks = [...text.matchAll(/href="\/works\/(\d+)"/g)];
         if (allWorkLinks.length > 0) {
-            const lastWorkId = allWorkLinks[allWorkLinks.length - 1][1];
+            const lastWorkId = allWorkLinks[allWorkLinks.length - 1];
             latestFoundUrl = `https://archiveofourown.org/works/${lastWorkId}`;
         }
       } else {
         const countMatch = text.match(/<dd class="chapters">(\d+)\//);
-        currentCount = countMatch ? parseInt(countMatch[1]) : 0;
+        currentCount = countMatch ? parseInt(countMatch) : 0;
         
-        // Find the absolute last chapter ID from the navigation dropdown
         const chapterOptions = [...text.matchAll(/<option value="(\d+)">\d+\./g)];
         if (chapterOptions.length > 0) {
-            const lastChapterId = chapterOptions[chapterOptions.length - 1][1];
-            latestFoundUrl = `${fic.url.split('/chapters')[0]}/chapters/${lastChapterId}`;
+            const lastChapterId = chapterOptions[chapterOptions.length - 1];
+            latestFoundUrl = `${fic.url.split('/chapters')}/chapters/${lastChapterId}`;
         }
       }
 
-      // Ensure links are updated retroactively
       fic.latestUrl = latestFoundUrl;
 
+      // Handle baseline setting or updates
       if (!fic.baselineSet) {
-        fic.lastChapter = currentCount;
+        fic.readChapter = currentCount;
+        fic.latestChapter = currentCount;
         fic.baselineSet = true;
         fic.hasNewUpdate = false;
-      } else if (currentCount > fic.lastChapter) {
-        fic.lastChapter = currentCount;
+      } else if (currentCount > fic.latestChapter) {
+        // ONLY update what AO3 has, keep readChapter untouched so we know the gap
+        fic.latestChapter = currentCount;
         fic.lastChecked = Date.now();
         fic.hasNewUpdate = true;
         showNotification(fic.title, latestFoundUrl);
@@ -87,8 +100,8 @@ function showNotification(title, url) {
   chrome.notifications.create({
     type: 'basic', 
     iconUrl: 'icon.png', 
-    title: 'New Update Found!', 
-    message: `${title} has a new entry!`, 
+    title: 'AO3 Update!', 
+    message: `${title} has a new update!`, 
     priority: 2
   });
 }

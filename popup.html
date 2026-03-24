@@ -6,6 +6,7 @@
     :root {
       --bg-dark: #121212; --header-bg: #1e1e1e; --item-hover: #2a2a2a;
       --text-main: #e0e0e0; --text-dim: #9aa0a6; --accent-purple: #9d4edd; --ao3-red: #990000;
+      --highlight: #ffd700;
     }
     body { width: 350px; margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg-dark); color: var(--text-main); overflow-x: hidden; }
     .header { background: var(--header-bg); padding: 12px 15px; display: flex; flex-direction: column; border-bottom: 1px solid #333; }
@@ -34,6 +35,10 @@
     .update-item:hover { background: var(--item-hover); }
     .item-info { flex-grow: 1; max-width: 80%; }
     .item-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    
+    .chapter-range { color: var(--highlight); font-weight: bold; background: rgba(255, 215, 0, 0.1); padding: 2px 6px; border-radius: 4px; margin-left: 4px; font-size: 11px; }
+    .chapter-single { color: var(--text-dim); margin-left: 4px; font-size: 12px; }
+
     .item-meta { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
     .status-dot { color: var(--accent-purple); font-size: 16px; margin-left: 10px; }
     
@@ -49,7 +54,7 @@
 <body>
   <div class="header">
     <div class="header-top">
-      <div class="header-title"></span> AO3 Tracker</div>
+      <div class="header-title"><span>←</span> AO3 Tracker</div>
       <div class="header-actions">
         <span id="markAllRead">Mark All Read</span>
         <span id="clearAll">Delete All</span>
