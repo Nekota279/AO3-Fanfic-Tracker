@@ -4,82 +4,339 @@
   <meta charset="UTF-8">
   <style>
     :root {
-      --bg-dark: #121212; --header-bg: #1e1e1e; --item-hover: #2a2a2a;
-      --text-main: #e0e0e0; --text-dim: #9aa0a6; --accent-purple: #9d4edd; --ao3-red: #990000;
-      --highlight: #ffd700;
+      --bg:        #1a1a1a;
+      --surface:   #242424;
+      --hover:     #2e2e2e;
+      --border:    #2e2e2e;
+      --text:      #e8e8e8;
+      --dim:       #888;
+      --ao3-red:   #990000;
+      --purple:    #7c6af7;
+      --gold:      #d4a017;
     }
-    body { width: 350px; margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg-dark); color: var(--text-main); overflow-x: hidden; }
-    .header { background: var(--header-bg); padding: 12px 15px; display: flex; flex-direction: column; border-bottom: 1px solid #333; }
-    .header-top { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 4px; }
-    .header-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-    #lastSyncContainer { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--text-dim); }
-    #refreshBtn { cursor: pointer; font-size: 14px; line-height: 1; transition: transform 0.3s; }
-    #refreshBtn:hover { color: white; transform: rotate(180deg); }
-    .header-actions { display: flex; gap: 12px; align-items: center; }
-    #markAllRead { cursor: pointer; font-size: 11px; color: var(--text-dim); text-decoration: underline; }
-    #clearAll { cursor:pointer; font-size: 11px; color: var(--ao3-red); font-weight: bold; }
-    
-    .tabs { display: flex; background: var(--header-bg); border-bottom: 1px solid #333; }
-    .tab { flex: 1; text-align: center; padding: 10px; font-size: 11px; cursor: pointer; color: var(--text-dim); transition: 0.2s; }
-    .tab.active { color: white; border-bottom: 2px solid var(--ao3-red); }
 
-    .search-container { padding: 8px 12px; background: var(--header-bg); }
-    #searchBar { width: 100%; background: #2d2d2d; border: none; border-radius: 4px; padding: 6px 10px; color: white; font-size: 13px; box-sizing: border-box; }
-    
-    .input-box { padding: 10px 15px; border-bottom: 1px solid #222; }
-    textarea { width: 100%; height: 45px; background: #1e1e1e; border: 1px solid #333; color: white; border-radius: 4px; padding: 5px; resize: none; font-size: 12px; box-sizing: border-box; }
-    #addBtn { width: 100%; margin-top: 8px; padding: 8px; background: var(--ao3-red); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-    
-    .update-list { max-height: 350px; overflow-y: auto; }
-    .update-item { padding: 12px 15px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; cursor: pointer; }
-    .update-item:hover { background: var(--item-hover); }
-    .item-info { flex-grow: 1; max-width: 80%; }
-    .item-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    
-    .chapter-range { color: var(--highlight); font-weight: bold; background: rgba(255, 215, 0, 0.1); padding: 2px 6px; border-radius: 4px; margin-left: 4px; font-size: 11px; }
-    .chapter-single { color: var(--text-dim); margin-left: 4px; font-size: 12px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    .item-meta { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
-    .status-dot { color: var(--accent-purple); font-size: 16px; margin-left: 10px; }
-    
-    .action-btn { background: transparent; border: none; color: var(--text-dim); font-size: 16px; cursor: pointer; display: none; padding: 5px; }
-    .update-item:hover .action-btn { display: block; }
-    .action-btn:hover { color: white; }
-    .icon-square { background: #444; color: white; border-radius: 3px; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; }
-    
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-thumb { background: #333; }
+    body {
+      width: 380px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, 'Segoe UI', sans-serif;
+      font-size: 13px;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--surface);
+      padding: 10px 14px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    #refreshBtn {
+      font-size: 16px;
+      cursor: pointer;
+      color: var(--dim);
+      transition: color 0.2s, transform 0.35s;
+      line-height: 1;
+    }
+    #refreshBtn:hover { color: var(--text); transform: rotate(180deg); }
+
+    #markAllRead {
+      font-size: 11px;
+      color: var(--dim);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    #clearAll {
+      font-size: 11px;
+      color: var(--ao3-red);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    #lastSync {
+      font-size: 10px;
+      color: var(--dim);
+      margin-top: 4px;
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .tab {
+      flex: 1;
+      text-align: center;
+      padding: 9px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--dim);
+      transition: color 0.15s;
+      letter-spacing: 0.3px;
+    }
+    .tab.active {
+      color: var(--text);
+      border-bottom: 2px solid var(--ao3-red);
+    }
+
+    /* ── Search ── */
+    .search-wrap {
+      padding: 8px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .search-wrap::before {
+      content: '🔍';
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    #searchBar {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 12px;
+      placeholder-color: var(--dim);
+    }
+    #searchBar::placeholder { color: var(--dim); }
+
+    /* ── Add input ── */
+    .input-box {
+      padding: 10px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    textarea {
+      width: 100%;
+      height: 42px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      padding: 6px 8px;
+      resize: none;
+      font-size: 11px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    textarea:focus { border-color: #555; }
+    #addBtn {
+      width: 100%;
+      margin-top: 7px;
+      padding: 7px;
+      background: var(--ao3-red);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      transition: background 0.2s;
+    }
+    #addBtn:hover { background: #b30000; }
+
+    /* ── List counter ── */
+    .list-header {
+      padding: 6px 14px;
+      font-size: 10px;
+      color: var(--dim);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Feed list ── */
+    .update-list {
+      max-height: 360px;
+      overflow-y: auto;
+    }
+    .update-list::-webkit-scrollbar { width: 3px; }
+    .update-list::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 2px; }
+
+    /* ── Each chapter row ── */
+    .chapter-row {
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s;
+      gap: 10px;
+    }
+    .chapter-row:hover { background: var(--hover); }
+
+    .row-info { flex: 1; min-width: 0; }
+
+    .row-title {
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    /* Chapter number tag — matches reference "c731" style */
+    .chap-tag {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text);
+      background: #333;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    .row-meta {
+      font-size: 11px;
+      color: var(--dim);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* "AO3" pill — mirrors the "n" (Novel Updates) badge in the reference */
+    .source-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--ao3-red);
+      color: white;
+      font-size: 9px;
+      font-weight: 700;
+      width: 20px;
+      height: 16px;
+      border-radius: 3px;
+      letter-spacing: 0.2px;
+    }
+
+    .dot-sep { color: #555; }
+
+    /* Unread dot — purple circle on the right, matches reference */
+    .unread-dot {
+      color: var(--purple);
+      font-size: 10px;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+
+    /* Mark-as-read button — shows on hover, replaces dot */
+    .mark-btn {
+      background: transparent;
+      border: none;
+      color: var(--purple);
+      font-size: 14px;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s;
+    }
+    .chapter-row:hover .mark-btn { opacity: 1; }
+    .mark-btn:hover { color: white; }
+
+    /* Chapter range badge (All Tracked view) */
+    .not-found-badge {
+      font-size: 10px;
+      font-weight: 700;
+      color: #ffaa00;
+      background: rgba(255,170,0,0.12);
+      border: 1px solid rgba(255,170,0,0.3);
+      padding: 1px 5px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
+    .chapter-range {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--gold);
+      background: rgba(212,160,23,0.12);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .chapter-single {
+      font-size: 11px;
+      color: var(--dim);
+    }
+
+    /* Remove button (All Tracked) */
+    .remove-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      opacity: 0;
+      padding: 3px;
+      transition: opacity 0.15s;
+    }
+    .chapter-row:hover .remove-btn { opacity: 1; }
+
+    .empty-msg {
+      padding: 24px;
+      text-align: center;
+      color: var(--dim);
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
+
   <div class="header">
-    <div class="header-top">
-      <div class="header-title"><span>←</span> AO3 Tracker</div>
+    <div class="header-row">
+      <div class="header-title">AO3 Tracker</div>
       <div class="header-actions">
         <span id="markAllRead">Mark All Read</span>
         <span id="clearAll">Delete All</span>
-        <span id="ficCount" style="font-size: 12px; color: var(--text-dim);">0</span>
+        <span id="refreshBtn" title="Check for updates now">↻</span>
       </div>
     </div>
-    <div id="lastSyncContainer">
-        <span id="lastSync">Syncing...</span>
-        <span id="refreshBtn" title="Check for updates now">↻</span>
-    </div>
+    <div id="lastSync">No sync yet</div>
   </div>
 
   <div class="tabs">
-    <div id="tabUpdates" class="tab active">New Updates</div>
+    <div id="tabUpdates" class="tab active">Updates</div>
     <div id="tabAll" class="tab">All Tracked</div>
   </div>
 
-  <div class="search-container"><input type="text" id="searchBar" placeholder="Search..."></div>
-
-  <div class="input-box">
-    <textarea id="ficUrls" placeholder="Paste AO3 links here..."></textarea>
-    <button id="addBtn">Add to Tracker</button>
+  <div class="search-wrap">
+    <input type="text" id="searchBar" placeholder="Search...">
   </div>
 
+  <div class="input-box">
+    <textarea id="ficUrls" placeholder="Paste AO3 work or series links here…"></textarea>
+    <button id="addBtn">+ Add to Tracker</button>
+  </div>
+
+  <div class="list-header"><span id="ficCount">0</span> entries</div>
+
   <div id="list" class="update-list"></div>
+
   <script src="popup.js"></script>
 </body>
 </html>
