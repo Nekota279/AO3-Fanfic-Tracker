@@ -54,6 +54,8 @@
       line-height: 1;
     }
     #refreshBtn:hover { color: var(--text); transform: rotate(180deg); }
+    #refreshBtn.spinning { animation: spin 1s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
     #markAllRead {
       font-size: 11px;
@@ -62,48 +64,37 @@
       text-decoration: underline;
     }
     #clearAll {
-  font-size: 11px;
-  cursor: pointer;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 3px;
-  transition: background 0.15s, color 0.15s;
-  user-select: none;
-}
-#clearAll.danger-stage-0 {
-  color: var(--ao3-red);
-  background: transparent;
-}
-#clearAll.danger-stage-1 {
-  color: #fff;
-  background: #b30000;
-}
-#clearAll.danger-stage-2 {
-  color: #fff;
-  background: #660000;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  cursor: default;
-}
-#clearAll.danger-stage-2 .type-confirm-label {
-  font-size: 10px;
-  white-space: nowrap;
-}
-#clearAll.danger-stage-2 input {
-  width: 58px;
-  background: #1a1a1a;
-  border: 1px solid #990000;
-  color: #fff;
-  font-size: 10px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  outline: none;
-}
-    
+      font-size: 11px;
+      color: var(--ao3-red);
+      cursor: pointer;
+      font-weight: 600;
+    }
     #lastSync {
       font-size: 10px;
       color: var(--dim);
+      margin-top: 4px;
+    }
+
+    /* ── Sync progress ── */
+    .sync-status {
+      margin-top: 6px;
+    }
+    .sync-bar-track {
+      width: 100%;
+      height: 3px;
+      background: #333;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .sync-bar-fill {
+      height: 100%;
+      background: var(--purple);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    .sync-status-text {
+      font-size: 10px;
+      color: var(--purple);
       margin-top: 4px;
     }
 
@@ -351,6 +342,10 @@
       </div>
     </div>
     <div id="lastSync">No sync yet</div>
+    <div id="syncStatus" class="sync-status" style="display:none;">
+      <div class="sync-bar-track"><div id="syncBarFill" class="sync-bar-fill"></div></div>
+      <div id="syncStatusText" class="sync-status-text"></div>
+    </div>
   </div>
 
   <div class="tabs">

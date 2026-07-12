@@ -6,6 +6,9 @@ const ficCount     = document.getElementById('ficCount');
 const clearAllBtn  = document.getElementById('clearAll');
 const markAllBtn   = document.getElementById('markAllRead');
 const refreshBtn   = document.getElementById('refreshBtn');
+const syncStatus     = document.getElementById('syncStatus');
+const syncBarFill    = document.getElementById('syncBarFill');
+const syncStatusText = document.getElementById('syncStatusText');
 const tabUpdates   = document.getElementById('tabUpdates');
 const tabAll       = document.getElementById('tabAll');
 const lastSyncText = document.getElementById('lastSync');
@@ -21,6 +24,16 @@ function updateBadge(fics) {
   chrome.action.setBadgeBackgroundColor({ color: '#990000' });
 }
 
+// fic.title comes from scraped AO3 HTML and is interpolated into innerHTML
+// templates below. Escape it so a title containing markup (accidental or
+// deliberately crafted, e.g. "<img src=x onerror=...>") can't execute in
+// the popup's context — it renders as inert text instead.
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 function timeAgo(ts) {
   if (!ts) return '';
   const diff = Date.now() - ts;
@@ -34,15 +47,32 @@ function timeAgo(ts) {
   return `${Math.floor(d / 30)}mo ago`;
 }
 
+// Renders the live "Syncing… 12/30" bar without touching the fic list,
+// so it can update every couple seconds during a long sync without
+// re-rendering rows (which would drop hover state / scroll position).
+function renderSyncProgress(progress) {
+  if (!progress || !progress.active || !progress.total) {
+    syncStatus.style.display = 'none';
+    refreshBtn.classList.remove('spinning');
+    return;
+  }
+  syncStatus.style.display = 'block';
+  refreshBtn.classList.add('spinning');
+  const pct = Math.round((progress.current / progress.total) * 100);
+  syncBarFill.style.width = `${pct}%`;
+  syncStatusText.innerText = `Syncing… ${progress.current}/${progress.total}`;
+}
+
 // ── Data ─────────────────────────────────────────────────────────────────────
 
 // Bring old-format fics (pre-newChapters) up to the current schema so
 // previously unread updates aren't silently dropped after an extension update.
 function migrateFic(f) {
+  // Unify old field names
   if (f.lastKnownCount === undefined) f.lastKnownCount = f.lastChapter || f.latestChapter || 0;
   if (f.readCount      === undefined) f.readCount      = f.readChapter  || 0;
   if (!Array.isArray(f.newChapters))  f.newChapters    = [];
-  if (f.baselineSet    === undefined) f.baselineSet    = true;
+  if (f.baselineSet    === undefined) f.baselineSet    = true; // existing entries are past baseline
 
   // No reliable per-chapter URL cached for this fic — flag it instead of
   // guessing. The old "f.latestUrl || f.url" fallback pointed at the bare
@@ -55,22 +85,28 @@ function migrateFic(f) {
 }
 
 function loadData() {
-  chrome.storage.local.get({ fics: [], lastSyncTime: 0 }, (data) => {
+  chrome.storage.local.get({ fics: [], lastSyncTime: 0, syncProgress: null }, (data) => {
+    // Migrate any fics written by an older version of the extension
     const migrated = data.fics.map(migrateFic);
-    chrome.storage.local.set({ fics: migrated });
+    const needsImmediateRescan = migrated.some(f => f.needsRescan);
+
+    // Persist the migrated data so background.js also sees the updated
+    // schema. This write must complete BEFORE we trigger a rescan below —
+    // otherwise checkFics() can read storage before needsRescan lands and
+    // silently skip fics that were just flagged.
+    chrome.storage.local.set({ fics: migrated }, () => {
+      if (needsImmediateRescan) {
+        chrome.runtime.sendMessage({ type: 'CHECK_NOW' });
+      }
+    });
 
     allFics = migrated;
     updateBadge(allFics);
     lastSyncText.innerText = data.lastSyncTime > 0
       ? 'Last checked: ' + new Date(data.lastSyncTime).toLocaleTimeString()
       : 'No sync yet';
+    renderSyncProgress(data.syncProgress);
     renderList(allFics);
-
-    // Any fic flagged during migration is missing real chapter URLs —
-    // pull them now instead of waiting for the 30-min alarm.
-    if (migrated.some(f => f.needsRescan)) {
-      chrome.runtime.sendMessage({ type: 'CHECK_NOW' });
-    }
   });
 }
 
@@ -122,7 +158,7 @@ function renderList(ficsToRender) {
         return `
           <div class="chapter-row" data-fic-url="${fic.url}" data-chapter-url="${ch.url}">
             <div class="row-info">
-              <div class="row-title">${fic.notFound ? '<span class="not-found-badge">⚠ Deleted/Private</span>' : ''} ${fic.title || 'Scanning…'} <span class="chap-tag">w${ch.num}</span></div>
+              <div class="row-title">${fic.notFound ? '<span class="not-found-badge">⚠ Deleted/Private</span>' : ''} ${escapeHtml(fic.title) || 'Scanning…'} <span class="chap-tag">w${ch.num}</span></div>
               <div class="row-meta">
                 <span class="source-badge">AO3</span>
                 <span class="dot-sep">·</span>
@@ -138,7 +174,7 @@ function renderList(ficsToRender) {
       return `
         <div class="chapter-row fic-range-row" data-fic-url="${fic.url}">
           <div class="row-info">
-            <div class="row-title">${fic.notFound ? '<span class="not-found-badge">⚠ Deleted/Private</span>' : ''} ${fic.title || 'Scanning…'} <span class="chap-tag chapter-range">c${start} → c${end}</span></div>
+            <div class="row-title">${fic.notFound ? '<span class="not-found-badge">⚠ Deleted/Private</span>' : ''} ${escapeHtml(fic.title) || 'Scanning…'} <span class="chap-tag chapter-range">c${start} → c${end}</span></div>
             <div class="row-meta">
               <span class="source-badge">AO3</span>
               <span class="dot-sep">·</span>
@@ -175,7 +211,7 @@ function renderList(ficsToRender) {
       return `
         <div class="chapter-row single-row" data-url="${latestUrl}" data-clean-url="${f.url}">
           <div class="row-info">
-            <div class="row-title">${f.notFound ? '<span class="not-found-badge">⚠ Deleted/Private</span>' : ''} ${f.title || 'Scanning…'} ${chapterInfo}</div>
+            <div class="row-title">${f.notFound ? '<span class="not-found-badge">⚠ Deleted/Private</span>' : ''} ${escapeHtml(f.title) || 'Scanning…'} ${chapterInfo}</div>
             <div class="row-meta">
               <span class="source-badge">AO3</span>
               <span class="dot-sep">·</span>
@@ -360,7 +396,11 @@ searchBar.addEventListener('input', () => renderList(allFics));
 // More reliable than the sendMessage callback, which can silently drop
 // if the MV3 service worker port disconnects mid-check (36 fics x 700ms = ~25s).
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.fics) loadData();
+  if (area !== 'local') return;
+  if (changes.fics) loadData();
+  // syncProgress updates every ~2s during a check — update just the bar,
+  // not the whole list, so long syncs don't thrash the DOM or drop hover state.
+  if (changes.syncProgress) renderSyncProgress(changes.syncProgress.newValue);
 });
 
 loadData();
