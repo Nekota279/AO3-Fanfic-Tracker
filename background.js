@@ -92,7 +92,8 @@ async function checkFics() {
             fic.readCount = currentCount; fic.lastKnownCount = currentCount;
             fic.baselineSet = true; fic.hasNewUpdate = false; fic.newChapters = [];
             console.log(`[AO3] Baseline set at ${currentCount} works`);
-          } else if (currentCount > fic.lastKnownCount) {
+          } else if (currentCount > fic.lastKnownCount || fic.needsRescan) {
+            fic.needsRescan = false;
             const readCount = fic.readCount || 0;
             const newIds = allWorkIds.slice(readCount);
             const existingUrls = new Set((fic.newChapters || []).map(c => c.url));
@@ -133,7 +134,8 @@ async function checkFics() {
             fic.readCount = currentCount; fic.lastKnownCount = currentCount;
             fic.baselineSet = true; fic.hasNewUpdate = false; fic.newChapters = [];
             console.log(`[AO3] Baseline set at chapter ${currentCount}`);
-          } else if (currentCount > fic.lastKnownCount) {
+          } else if (currentCount > fic.lastKnownCount || fic.needsRescan) {
+            fic.needsRescan = false;
             const readCount = fic.readCount || 0;
             const newIds = allChapterIds.slice(readCount);
             const existingUrls = new Set((fic.newChapters || []).map(c => c.url));

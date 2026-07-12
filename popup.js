@@ -39,18 +39,16 @@ function timeAgo(ts) {
 // Bring old-format fics (pre-newChapters) up to the current schema so
 // previously unread updates aren't silently dropped after an extension update.
 function migrateFic(f) {
-  // Unify old field names
   if (f.lastKnownCount === undefined) f.lastKnownCount = f.lastChapter || f.latestChapter || 0;
   if (f.readCount      === undefined) f.readCount      = f.readChapter  || 0;
   if (!Array.isArray(f.newChapters))  f.newChapters    = [];
-  if (f.baselineSet    === undefined) f.baselineSet    = true; // existing entries are past baseline
+  if (f.baselineSet    === undefined) f.baselineSet    = true;
 
-  // If the fic was flagged as having an update but newChapters is empty,
-  // synthesise one entry so it still shows up in the feed.
+  // No reliable per-chapter URL cached for this fic — flag it instead of
+  // guessing. The old "f.latestUrl || f.url" fallback pointed at the bare
+  // work URL, which AO3 resolves to chapter 1, not the real unread chapter.
   if (f.hasNewUpdate && f.newChapters.length === 0) {
-    const url = f.latestUrl || f.url;
-    const num = f.lastKnownCount || 0;
-    f.newChapters = [{ url, num, detectedAt: f.lastChecked || Date.now() }];
+    f.needsRescan = true;
   }
 
   return f;
@@ -58,9 +56,7 @@ function migrateFic(f) {
 
 function loadData() {
   chrome.storage.local.get({ fics: [], lastSyncTime: 0 }, (data) => {
-    // Migrate any fics written by an older version of the extension
     const migrated = data.fics.map(migrateFic);
-    // Persist the migrated data so background.js also sees the updated schema
     chrome.storage.local.set({ fics: migrated });
 
     allFics = migrated;
@@ -69,6 +65,12 @@ function loadData() {
       ? 'Last checked: ' + new Date(data.lastSyncTime).toLocaleTimeString()
       : 'No sync yet';
     renderList(allFics);
+
+    // Any fic flagged during migration is missing real chapter URLs —
+    // pull them now instead of waiting for the 30-min alarm.
+    if (migrated.some(f => f.needsRescan)) {
+      chrome.runtime.sendMessage({ type: 'CHECK_NOW' });
+    }
   });
 }
 
@@ -78,20 +80,34 @@ function renderList(ficsToRender) {
   const query = searchBar.value.trim().toLowerCase();
 
   if (currentView === 'updates') {
-    // Flatten all fics → individual chapter rows, newest first
+    // Series keep the old one-row-per-new-chapter behavior.
+    // Fics (non-series) collapse into a single range row (e.g. "c11 → c18");
+    // clicking it opens the oldest unread chapter and advances the range by one.
     const rows = [];
     ficsToRender.forEach(f => {
       if (!f.hasNewUpdate) return;
       if (query && !(f.title || '').toLowerCase().includes(query)) return;
+
+      const chapters = f.newChapters || [];
+      if (chapters.length === 0) return;
+
       const isSeries = f.url.includes('/series/');
-      const label    = isSeries ? 'w' : 'c';
-      (f.newChapters || []).forEach(ch => {
-        rows.push({ fic: f, ch, label });
-      });
+
+      if (isSeries) {
+        chapters.forEach(ch => {
+          rows.push({ type: 'series', fic: f, ch, sortKey: ch.detectedAt || 0 });
+        });
+      } else {
+        const sorted = [...chapters].sort((a, b) => a.num - b.num);
+        const start  = (f.readCount || 0) + 1;
+        const end    = f.lastKnownCount || sorted.at(-1).num;
+        const sortKey = Math.min(...chapters.map(c => c.detectedAt || 0));
+        rows.push({ type: 'fic', fic: f, start, end, sortKey });
+      }
     });
 
-    // Sort: most recently detected first
-    rows.sort((a, b) => (b.ch.detectedAt || 0) - (a.ch.detectedAt || 0));
+    // Oldest unread first
+    rows.sort((a, b) => a.sortKey - b.sortKey);
 
     ficCount.innerText = rows.length;
 
@@ -100,19 +116,38 @@ function renderList(ficsToRender) {
       return;
     }
 
-    listDiv.innerHTML = rows.map(({ fic, ch, label }) => `
-      <div class="chapter-row" data-fic-url="${fic.url}" data-chapter-url="${ch.url}">
-        <div class="row-info">
-          <div class="row-title">${fic.notFound ? '<span class="not-found-badge">⚠ Deleted/Private</span>' : ''} ${fic.title || 'Scanning…'} <span class="chap-tag">${label}${ch.num}</span></div>
-          <div class="row-meta">
-            <span class="source-badge">AO3</span>
-            <span class="dot-sep">·</span>
-            <span>${timeAgo(ch.detectedAt)}</span>
+    listDiv.innerHTML = rows.map(row => {
+      if (row.type === 'series') {
+        const { fic, ch } = row;
+        return `
+          <div class="chapter-row" data-fic-url="${fic.url}" data-chapter-url="${ch.url}">
+            <div class="row-info">
+              <div class="row-title">${fic.notFound ? '<span class="not-found-badge">⚠ Deleted/Private</span>' : ''} ${fic.title || 'Scanning…'} <span class="chap-tag">w${ch.num}</span></div>
+              <div class="row-meta">
+                <span class="source-badge">AO3</span>
+                <span class="dot-sep">·</span>
+                <span>${timeAgo(ch.detectedAt)}</span>
+              </div>
+            </div>
+            <button class="mark-btn" data-fic-url="${fic.url}" data-chapter-url="${ch.url}" title="Mark as read">●</button>
+          </div>
+        `;
+      }
+
+      const { fic, start, end } = row;
+      return `
+        <div class="chapter-row fic-range-row" data-fic-url="${fic.url}">
+          <div class="row-info">
+            <div class="row-title">${fic.notFound ? '<span class="not-found-badge">⚠ Deleted/Private</span>' : ''} ${fic.title || 'Scanning…'} <span class="chap-tag chapter-range">c${start} → c${end}</span></div>
+            <div class="row-meta">
+              <span class="source-badge">AO3</span>
+              <span class="dot-sep">·</span>
+              <span>Fic</span>
+            </div>
           </div>
         </div>
-        <button class="mark-btn" data-fic-url="${fic.url}" data-chapter-url="${ch.url}" title="Mark as read">●</button>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
   } else {
     // All Tracked: compact one-row-per-fic
@@ -161,8 +196,8 @@ function renderList(ficsToRender) {
 // ── Events ────────────────────────────────────────────────────────────────────
 
 function attachEventListeners() {
-  // Updates view: click row → open chapter + mark it read
-  document.querySelectorAll('.chapter-row:not(.single-row)').forEach(row => {
+  // Updates view (series rows): click row → open that chapter/work + mark it read
+  document.querySelectorAll('.chapter-row:not(.single-row):not(.fic-range-row)').forEach(row => {
     row.addEventListener('click', (e) => {
       if (e.target.closest('.mark-btn')) return;
       const { ficUrl, chapterUrl } = row.dataset;
@@ -171,7 +206,15 @@ function attachEventListeners() {
     });
   });
 
-  // Mark-read dot button (marks just that chapter without opening)
+  // Updates view (fic range rows): click → open the oldest unread chapter,
+  // advance the range by exactly one. Click again next time for the next chapter.
+  document.querySelectorAll('.fic-range-row').forEach(row => {
+    row.addEventListener('click', () => {
+      advanceFicRead(row.dataset.ficUrl);
+    });
+  });
+
+  // Mark-read dot button (series rows only — marks just that chapter without opening)
   document.querySelectorAll('.mark-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -208,6 +251,28 @@ function markChapterRead(ficUrl, chapterUrl) {
         f.hasNewUpdate = false;
         f.readCount    = f.lastKnownCount || f.readCount || 0;
       }
+      return f;
+    });
+    chrome.storage.local.set({ fics }, loadData);
+  });
+}
+
+// Open the oldest unread chapter for a fic and advance its read range by exactly
+// one chapter. Used by the collapsed "c11 → c18" range rows in Updates — each
+// click walks forward one chapter until the fic is fully caught up.
+function advanceFicRead(ficUrl) {
+  chrome.storage.local.get({ fics: [] }, (data) => {
+    const fics = data.fics.map(f => {
+      if (f.url !== ficUrl) return f;
+      const sorted = [...(f.newChapters || [])].sort((a, b) => a.num - b.num);
+      const next = sorted[0];
+      if (!next) return f;
+
+      chrome.tabs.create({ url: next.url });
+
+      f.newChapters = (f.newChapters || []).filter(c => c.url !== next.url);
+      f.readCount   = Math.max(f.readCount || 0, next.num);
+      if (f.newChapters.length === 0) f.hasNewUpdate = false;
       return f;
     });
     chrome.storage.local.set({ fics }, loadData);
