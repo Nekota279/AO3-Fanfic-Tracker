@@ -86,19 +86,16 @@ function migrateFic(f) {
 
 function loadData() {
   chrome.storage.local.get({ fics: [], lastSyncTime: 0, syncProgress: null }, (data) => {
-    // Migrate any fics written by an older version of the extension
+    // Migrate any fics written by an older version of the extension.
+    // migrateFic may flag a fic with needsRescan — that's picked up by the
+    // next scheduled alarm or a manual refresh click, NOT triggered here.
+    // Auto-firing CHECK_NOW on every popup open meant a fic stuck in a
+    // permanent failure state (e.g. an unresolved fetch error) would
+    // re-sync everything on every single popup open, forever.
     const migrated = data.fics.map(migrateFic);
-    const needsImmediateRescan = migrated.some(f => f.needsRescan);
 
-    // Persist the migrated data so background.js also sees the updated
-    // schema. This write must complete BEFORE we trigger a rescan below —
-    // otherwise checkFics() can read storage before needsRescan lands and
-    // silently skip fics that were just flagged.
-    chrome.storage.local.set({ fics: migrated }, () => {
-      if (needsImmediateRescan) {
-        chrome.runtime.sendMessage({ type: 'CHECK_NOW' });
-      }
-    });
+    // Persist the migrated schema so background.js sees it on its next run.
+    chrome.storage.local.set({ fics: migrated });
 
     allFics = migrated;
     updateBadge(allFics);
@@ -216,6 +213,10 @@ function renderList(ficsToRender) {
               <span class="source-badge">AO3</span>
               <span class="dot-sep">·</span>
               <span>${isSeries ? 'Series' : 'Fic'}</span>
+              ${f.numberingIssue ? `
+                <span class="dot-sep">·</span>
+                <button class="numbering-badge" data-url="${f.url}" title="AO3's chapter count and the tracker's chapter list disagree — click to re-check">⚠ Numbering issue, click to re-check</button>
+              ` : ''}
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
@@ -262,6 +263,7 @@ function attachEventListeners() {
   document.querySelectorAll('.single-row').forEach(row => {
     row.addEventListener('click', (e) => {
       if (e.target.closest('.remove-btn')) return;
+      if (e.target.closest('.numbering-badge')) return;
       chrome.tabs.create({ url: row.dataset.url });
     });
   });
@@ -270,6 +272,16 @@ function attachEventListeners() {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       removeFic(btn.dataset.url);
+    });
+  });
+
+  // Numbering-issue badge: manually reset retry state and force an
+  // immediate rescan for just this fic, instead of waiting on the
+  // automatic (capped) retry logic in background.js.
+  document.querySelectorAll('.numbering-badge').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      manualRescan(btn.dataset.url);
     });
   });
 }
@@ -334,6 +346,28 @@ function markAllRead() {
 function removeFic(url) {
   chrome.storage.local.get({ fics: [] }, (data) => {
     chrome.storage.local.set({ fics: data.fics.filter(f => f.url !== url) }, loadData);
+  });
+}
+
+// Reset a fic's mismatch-retry state and force an immediate rescan.
+// Used by the "⚠ Numbering issue" badge — background.js gives up
+// auto-retrying after MAX_MISMATCH_RETRIES, so this is the manual
+// re-arm for when the underlying AO3 page has since been fixed
+// (or you just want to try again).
+function manualRescan(ficUrl) {
+  chrome.storage.local.get({ fics: [] }, (data) => {
+    const fics = data.fics.map(f => {
+      if (f.url !== ficUrl) return f;
+      f.numberingIssue = false;
+      f.mismatchRetries = 0;
+      f.needsRescan = true;
+      return f;
+    });
+    // Wait for the write to land before triggering the sync — same
+    // ordering fix as loadData's migration write.
+    chrome.storage.local.set({ fics }, () => {
+      chrome.runtime.sendMessage({ type: 'CHECK_NOW' }, () => loadData());
+    });
   });
 }
 

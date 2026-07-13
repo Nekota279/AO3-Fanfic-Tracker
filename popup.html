@@ -297,6 +297,24 @@
       flex-shrink: 0;
     }
 
+    /* Numbering-issue badge — clickable, triggers a manual per-fic rescan */
+    .numbering-badge {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--purple);
+      background: rgba(124,106,247,0.12);
+      border: 1px solid rgba(124,106,247,0.35);
+      padding: 1px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s, color 0.15s;
+    }
+    .numbering-badge:hover {
+      background: var(--purple);
+      color: white;
+    }
+
     .chapter-range {
       font-size: 11px;
       font-weight: 700;

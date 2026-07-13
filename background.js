@@ -1,5 +1,5 @@
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create('checkUpdates', { periodInMinutes: 120 });
+  chrome.alarms.create('checkUpdates', { periodInMinutes: 30 });
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -22,6 +22,12 @@ function updateBadge(fics) {
 function setSyncProgress(current, total) {
   return chrome.storage.local.set({ syncProgress: { current, total, active: current < total } });
 }
+
+// After this many consecutive count-mismatches, stop auto-retrying every
+// sync and flag the fic for manual review instead (see numberingIssue).
+// A structural mismatch (e.g. a deleted chapter) doesn't resolve itself,
+// so retrying forever just means constant background churn.
+const MAX_MISMATCH_RETRIES = 3;
 
 async function checkFics() {
   // Any chrome.* API call resets the service worker's 30s idle timer.
@@ -55,6 +61,9 @@ async function checkFics() {
               console.warn(`[AO3] 404 — marking as not found: ${fic.url}`);
               fic.notFound = true;
               fic.title = fic.title || '(Deleted / Private)';
+              // Permanently gone — retrying via needsRescan every popup
+              // open would just re-fetch the same 404 forever.
+              fic.needsRescan = false;
               await setSyncProgress(i, total);
               continue;
             }
@@ -107,8 +116,18 @@ async function checkFics() {
           // the wrong work at the wrong number. Catch that instead of guessing.
           const workCountMismatch = currentCount > 0 && allWorkIds.length !== currentCount;
           if (workCountMismatch) {
-            console.warn(`[AO3] Series work-ID mismatch for "${fic.title || fic.url}": found ${allWorkIds.length} work link(s) but AO3 reports ${currentCount}. Skipping numbering this round, will retry.`);
-            fic.needsRescan = true;
+            fic.mismatchRetries = (fic.mismatchRetries || 0) + 1;
+            if (fic.mismatchRetries >= MAX_MISMATCH_RETRIES) {
+              console.warn(`[AO3] Series work-ID mismatch persisted for "${fic.title || fic.url}" after ${fic.mismatchRetries} checks (found ${allWorkIds.length}, AO3 reports ${currentCount}). Flagging for manual review instead of retrying every sync.`);
+              fic.numberingIssue = true;
+              fic.needsRescan = false;
+            } else {
+              console.warn(`[AO3] Series work-ID mismatch for "${fic.title || fic.url}" (attempt ${fic.mismatchRetries}/${MAX_MISMATCH_RETRIES}): found ${allWorkIds.length} work link(s) but AO3 reports ${currentCount}. Will retry.`);
+              fic.needsRescan = true;
+            }
+          } else {
+            fic.mismatchRetries = 0;
+            fic.numberingIssue = false;
           }
 
           if (!fic.baselineSet) {
@@ -160,8 +179,18 @@ async function checkFics() {
           // and hand back the wrong chapter under the wrong number.
           const chapterCountMismatch = currentCount > 0 && allChapterIds.length !== currentCount;
           if (chapterCountMismatch) {
-            console.warn(`[AO3] Chapter-ID mismatch for "${fic.title || fic.url}": found ${allChapterIds.length} chapter option(s) but AO3 reports ${currentCount}. Skipping numbering this round, will retry.`);
-            fic.needsRescan = true;
+            fic.mismatchRetries = (fic.mismatchRetries || 0) + 1;
+            if (fic.mismatchRetries >= MAX_MISMATCH_RETRIES) {
+              console.warn(`[AO3] Chapter-ID mismatch persisted for "${fic.title || fic.url}" after ${fic.mismatchRetries} checks (found ${allChapterIds.length}, AO3 reports ${currentCount}). Flagging for manual review instead of retrying every sync.`);
+              fic.numberingIssue = true;
+              fic.needsRescan = false;
+            } else {
+              console.warn(`[AO3] Chapter-ID mismatch for "${fic.title || fic.url}" (attempt ${fic.mismatchRetries}/${MAX_MISMATCH_RETRIES}): found ${allChapterIds.length} chapter option(s) but AO3 reports ${currentCount}. Will retry.`);
+              fic.needsRescan = true;
+            }
+          } else {
+            fic.mismatchRetries = 0;
+            fic.numberingIssue = false;
           }
 
           if (!fic.baselineSet) {
